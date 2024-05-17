@@ -24,6 +24,14 @@ class CoroutineState(abc.ABC):
         cls_name = self.__class__.__name__
         return f"{cls_name}(status={self.state})"
 
+    @abc.abstractmethod
+    def is_done(self) -> bool:
+        return False
+
+    @abc.abstractmethod
+    def is_running(self) -> bool:
+        return False
+
     @property
     @abc.abstractmethod
     def state(self) -> str:
@@ -47,16 +55,22 @@ class FinishedCoroutineState(CoroutineState):
     def state(self) -> str:
         return CoroutineStates.FINISHED
 
+    def is_done(self) -> bool:
+        return True
+
+    def is_running(self) -> bool:
+        return False
+
     def cancel(self) -> typing.NoReturn:
-        msg = "the finished coroutine is uncancellable."
+        msg = "the finished coroutine is uncancellable"
         raise CoroutineError(msg)
 
     def run(self) -> typing.NoReturn:
-        msg = "the finished coroutine is unrunnable."
+        msg = "the finished coroutine is unrunnable"
         raise CoroutineError(msg)
 
     def finish(self) -> typing.NoReturn:
-        msg = "the coroutine is already finished."
+        msg = "the coroutine is already finished"
         raise CoroutineError(msg)
 
 
@@ -65,16 +79,22 @@ class CancelledCoroutineState(CoroutineState):
     def state(self) -> str:
         return CoroutineStates.CANCELLED
 
+    def is_done(self) -> bool:
+        return False
+
+    def is_running(self) -> bool:
+        return False
+
     def cancel(self) -> typing.NoReturn:
-        msg = "the coroutine is already cancelled."
+        msg = "the coroutine is already cancelled"
         raise CoroutineError(msg)
 
     def run(self) -> typing.NoReturn:
-        msg = "the cancelled coroutine is unrunnable."
+        msg = "the cancelled coroutine is unrunnable"
         raise CoroutineError(msg)
 
     def finish(self) -> typing.NoReturn:
-        msg = "the cancelled state cannot be finished."
+        msg = "the cancelled state cannot be finished"
         raise CoroutineError(msg)
 
 
@@ -83,11 +103,17 @@ class RunningCoroutineState(CoroutineState):
     def state(self) -> str:
         return CoroutineStates.RUNNING
 
+    def is_done(self) -> bool:
+        return False
+
+    def is_running(self) -> bool:
+        return True
+
     def cancel(self) -> CoroutineState:
         return CancelledCoroutineState()
 
     def run(self) -> typing.NoReturn:
-        msg = "the coroutine is already running."
+        msg = "the coroutine is already running"
         raise CoroutineError(msg)
 
     def finish(slef) -> CoroutineState:
@@ -98,6 +124,12 @@ class NewCoroutineState(CoroutineState):
     @property
     def state(self) -> str:
         return CoroutineStates.CREATED
+
+    def is_done(self) -> bool:
+        return False
+
+    def is_running(self) -> bool:
+        return False
 
     def cancel(self) -> CoroutineState:
         return CancelledCoroutineState()
@@ -122,10 +154,10 @@ class CoroutineStateMachine:
         return isinstance(self._state, CancelledCoroutineState)
 
     def is_done(self) -> bool:
-        return isinstance(self._state, FinishedCoroutineState)
+        return self._state.is_done()
 
     def is_running(self) -> bool:
-        return isinstance(self._state, RunningCoroutineState)
+        return self._state.is_running()
 
     def cancel(self) -> None:
         self._state = self._state.cancel()
@@ -137,68 +169,94 @@ class CoroutineStateMachine:
         self._state = self._state.finish()
 
 
-def _ensure_generator_function(
-    gen_func: typing.Callable, *args, **kwargs
-) -> CoroutineType:
+def _ensure_generator(gen_func: typing.Callable, *args, **kwargs) -> CoroutineType:
     if not inspect.isgeneratorfunction(gen_func):
         msg = f"the {gen_func} is not a generator function"
         raise TypeError(msg)
+    iter(args)
+    iter(kwargs)
     return gen_func(*args, **kwargs)
 
 
 class Coroutine:
-    """A custom generator-based coroutine class."""
+    """A custom generator-based coroutine class.
+
+    It shares some Future-like functionality.
+    """
 
     def __init__(
         self,
         gen_fn: typing.Callable,
-        args: typing.Iterable[typing.Any],
-        kwargs: typing.Mapping[str, typing.Any],
+        args: None | typing.Iterable[typing.Any] = None,
+        kwargs: None | typing.Mapping[str, typing.Any] = None,
     ):
-        self._coro = _ensure_generator_function(gen_fn, *args, **kwargs)
+        args = args if args else ()
+        kwargs = kwargs if kwargs else {}
+        try:
+            self._coro = _ensure_generator(gen_fn, *args, **kwargs)
+        except TypeError as e:
+            raise CoroutineError(str(e)) from e
         self._res = None
         self._exc = None
         self._sm = CoroutineStateMachine()
 
-    def exception(self) -> None | Exception:
-        if self._sm.is_done():
-            return self._exc
-        msg = "the coroutine is not done, no exception to return"
-        raise CoroutineError(msg)
-
-    def result(self) -> typing.Any:
-        if self._sm.is_done():
-            return self._res
-        msg = "the coroutine is not done, no result to return"
-        raise CoroutineError(msg)
+    def __next__(self) -> typing.Any:
+        return next(self._step())
 
     @property
     def state(self) -> CoroutineState:
         return self._sm._state
 
+    def is_done(self) -> bool:
+        return self.state.is_done()
+
+    def is_running(self) -> bool:
+        return self.state.is_running()
+
+    def exception(self) -> None | Exception:
+        if self.state.is_done():
+            return self._exc
+        msg = "the coroutine is not done, no exception to return"
+        raise CoroutineError(msg)
+
+    def result(self) -> typing.Any:
+        if self.state.is_done():
+            if exc := self.exception():
+                raise exc
+            return self._res
+        msg = "the coroutine is not done, no result to return"
+        raise CoroutineError(msg)
+
     def _finalise(self) -> None:
         self._sm.finish()
         self._coro.close()
 
-    def step(self):
-        if not self._sm.is_running():
-            msg = "to step, the coroutine must be run first"
+    def run(self) -> typing.Any:
+        self._sm.run()
+
+    def _step(self) -> typing.Generator[typing.Any, None, None]:
+        if not self.state.is_running():
+            msg = "the coroutine is not running"
             raise CoroutineError(msg)
         try:
             value = None
             while True:
                 value = self._coro.send(value)
-                yield
+                yield value
         except StopIteration as result:
-            self._res = result
+            self._res = result.value
             self._finalise()
         except Exception as exc:
             self._exc = exc
             self._finalise()
 
-    def run(self) -> None:
-        self._sm.run()
-        next(self.step())
+    def wait(self) -> None:
+        """Waits for the coroutine blockingly."""
+
+        if not self.state.is_running():
+            self.run()
+        for _ in self._step():
+            pass
 
 
 def coroutine(gen_func: typing.Callable):
@@ -207,3 +265,14 @@ def coroutine(gen_func: typing.Callable):
         return Coroutine(gen_fn=gen_func, args=args, kwargs=kwargs)
 
     return _wrapper
+
+
+# def _gen1():
+#     yield 1
+#     return 2
+
+# coro = Coroutine(gen_fn=_gen1)
+# coro.run()
+# print(next(coro))
+# print(next(coro))
+# print(next(coro))
