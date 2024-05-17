@@ -181,7 +181,19 @@ def _ensure_generator(gen_func: typing.Callable, *args, **kwargs) -> CoroutineTy
 class Coroutine:
     """A custom generator-based coroutine class.
 
-    It shares some Future-like functionality.
+    A coroutine accepts a generator function only.
+
+    When the coroutine is instantiated, it has the CREATED state.
+    The `wait` method allows to wait for the result of a coroutine.
+    Otherwise the coroutine can be finished via successive `next` calls.
+
+    The coroutine can be finished in two ways:
+    1. normally - with a result and no exception
+    2. otherwise with an exception and None result
+
+    In the first way, the `result` method will return some result.
+    Otherwise, when an exception occured, the latter is raised.
+    The `exception` method allows to get the occured exception safely.
     """
 
     def __init__(
@@ -201,6 +213,8 @@ class Coroutine:
         self._sm = CoroutineStateMachine()
 
     def __next__(self) -> typing.Any:
+        if not self.is_running():
+            self._run()
         return next(self._step())
 
     @property
@@ -214,12 +228,28 @@ class Coroutine:
         return self.state.is_running()
 
     def exception(self) -> None | Exception:
+        """Returns an exception or None for a done coroutine.
+
+        Raises:
+            CoroutineError - if a coroutine is not done
+
+        Returns:
+            None - if a coroutine is finished normally
+            Exception - otherwise
+        """
+
         if self.state.is_done():
             return self._exc
         msg = "the coroutine is not done, no exception to return"
         raise CoroutineError(msg)
 
     def result(self) -> typing.Any:
+        """Returns either the result or raises an exception.
+
+        Raises:
+            CoroutineError - accessing the result of an unfinished coroutine
+        """
+
         if self.state.is_done():
             if exc := self.exception():
                 raise exc
@@ -231,7 +261,12 @@ class Coroutine:
         self._sm.finish()
         self._coro.close()
 
-    def run(self) -> typing.Any:
+    def _run(self) -> None:
+        """Moves the coroutine into the running state.
+
+        To proceed, use the next function on the coroutine.
+        """
+
         self._sm.run()
 
     def _step(self) -> typing.Generator[typing.Any, None, None]:
@@ -251,10 +286,14 @@ class Coroutine:
             self._finalise()
 
     def wait(self) -> None:
-        """Waits for the coroutine blockingly."""
+        """Waits for the coroutine.
+
+        The waiting is done in a blocking way.
+        To get the result, use the result() function.
+        """
 
         if not self.state.is_running():
-            self.run()
+            self._run()
         for _ in self._step():
             pass
 
@@ -265,14 +304,3 @@ def coroutine(gen_func: typing.Callable):
         return Coroutine(gen_fn=gen_func, args=args, kwargs=kwargs)
 
     return _wrapper
-
-
-# def _gen1():
-#     yield 1
-#     return 2
-
-# coro = Coroutine(gen_fn=_gen1)
-# coro.run()
-# print(next(coro))
-# print(next(coro))
-# print(next(coro))
