@@ -1,26 +1,70 @@
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Iterable, Mapping
 
-from pydantic import BaseModel, NonNegativeInt
+from pydantic import BaseModel, NonNegativeInt, ValidationError
 
 
-class Job(BaseModel):
+class JobError(Exception):
+    pass
+
+
+class JobInfo(BaseModel):
     fn: Callable
     args: tuple[Any, ...] = ()
     kwargs: dict[str, Any] = {}
-    max_retries: NonNegativeInt = 0
+    max_retries: None | NonNegativeInt = None
     start: None | datetime = None
     duration: None | NonNegativeInt = None
-    dependencies: tuple["Job", ...] = ()
+    dependencies: tuple["JobInfo", ...] = ()
+
+
+class Job:
+    def __init__(
+        self,
+        fn: Callable,
+        args: None | Iterable[Any] = None,
+        kwargs: None | Mapping[str, Any] = None,
+        max_retries: None | NonNegativeInt = None,
+        start: None | datetime = None,
+        duration: None | NonNegativeInt = None,
+        dependencies: None | Iterable["Job"] = None,
+    ) -> None:
+        try:
+            deps = [dep_job.info for dep_job in dependencies] if dependencies else ()
+            self._info = JobInfo(
+                fn=fn,
+                args=args if args else (),
+                kwargs=kwargs if kwargs else {},
+                max_retries=max_retries,
+                start=start,
+                duration=duration,
+                dependencies=deps,
+            )
+        except (AttributeError, ValidationError) as e:
+            raise JobError(str(e)) from e
+
+    def __eq__(self, other: "Job") -> bool:
+        return self._info == other._info
 
     def __lt__(self, other: "Job") -> bool:
-        if self.start is None:
+        sst = self.info.start
+        ost = other.info.start
+        if sst is None:
             return True
-        if other.start is None:
+        if ost is None:
             return False
-        return self.start < other.start
+        return sst < ost
 
-    # redundant, but OK
+    @property
+    def info(self) -> JobInfo:
+        """Return the information about the job.
+
+        Returns:
+            JobInfo - the deepcopy of the Job data
+        """
+
+        return self._info
+
     def to_dict(self) -> dict[str, Any]:
         """Returns the job as a dictionary.
 
@@ -28,4 +72,4 @@ class Job(BaseModel):
             dict[str, Any]
         """
 
-        return self.model_dump()
+        return self._info.model_dump()
