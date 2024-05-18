@@ -3,7 +3,7 @@ from typing import Any, Callable, ContextManager
 
 import pytest
 
-from sprint2.coro import Coroutine, CoroutineError
+from sprint2.coro import Coroutine, CoroutineError, CoroutineStatuses
 
 
 CORO_NOT_DONE_RESULT = "the coroutine is not done, no result to return"
@@ -24,6 +24,11 @@ def _gen2():
     yield 42
     yield 21
     return 12
+
+
+def _gen3():
+    yield 12
+    raise ZeroDivisionError("oh no")
 
 
 @pytest.mark.parametrize(
@@ -111,3 +116,35 @@ def test_coroutine_switch():
         next(coro1)
     with pytest.raises(CoroutineError, match=CORO_DONE_IS_NO_RUN):
         next(coro2)
+
+
+def test_repr_coro_with_returned():
+    coro = Coroutine(gen_fn=_gen1)
+
+    cls_name = Coroutine.__name__
+    repr_base = f"{cls_name}(id={id(coro)}"
+
+    assert str(coro) == f"{repr_base}, status={CoroutineStatuses.CREATED})"
+
+    next(coro)
+    assert str(coro) == f"{repr_base}, status={CoroutineStatuses.RUNNING})"
+
+    with suppress(StopIteration):
+        next(coro)
+    assert str(coro) == f"{repr_base}, status={CoroutineStatuses.FINISHED}, returned=2)"
+
+
+def test_repr_coro_with_raised():
+    coro = Coroutine(gen_fn=_gen3)
+
+    cls_name = Coroutine.__name__
+    repr_base = f"{cls_name}(id={id(coro)}"
+
+    assert str(coro) == f"{repr_base}, status={CoroutineStatuses.CREATED})"
+
+    next(coro)
+    assert str(coro) == f"{repr_base}, status={CoroutineStatuses.RUNNING})"
+
+    with suppress(StopIteration):
+        next(coro)
+    assert str(coro) == f"{repr_base}, status={CoroutineStatuses.FINISHED}, raised=oh no)"

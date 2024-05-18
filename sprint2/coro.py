@@ -12,7 +12,7 @@ class CoroutineError(Exception):
     pass
 
 
-class CoroutineStates(str, enum.Enum):
+class CoroutineStatuses(str, enum.Enum):
     CREATED = "CREATED"
     CANCELLED = "CANCELLED"
     RUNNING = "RUNNING"
@@ -22,7 +22,7 @@ class CoroutineStates(str, enum.Enum):
 class CoroutineState(abc.ABC):
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        return f"{cls_name}(status={self.state})"
+        return f"{cls_name}(status={self.status})"
 
     @abc.abstractmethod
     def is_done(self) -> bool:
@@ -34,7 +34,7 @@ class CoroutineState(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def state(self) -> str:
+    def status(self) -> str:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -52,8 +52,8 @@ class CoroutineState(abc.ABC):
 
 class FinishedCoroutineState(CoroutineState):
     @property
-    def state(self) -> str:
-        return CoroutineStates.FINISHED
+    def status(self) -> str:
+        return CoroutineStatuses.FINISHED
 
     def is_done(self) -> bool:
         return True
@@ -76,8 +76,8 @@ class FinishedCoroutineState(CoroutineState):
 
 class CancelledCoroutineState(CoroutineState):
     @property
-    def state(self) -> str:
-        return CoroutineStates.CANCELLED
+    def status(self) -> str:
+        return CoroutineStatuses.CANCELLED
 
     def is_done(self) -> bool:
         return False
@@ -100,8 +100,8 @@ class CancelledCoroutineState(CoroutineState):
 
 class RunningCoroutineState(CoroutineState):
     @property
-    def state(self) -> str:
-        return CoroutineStates.RUNNING
+    def status(self) -> str:
+        return CoroutineStatuses.RUNNING
 
     def is_done(self) -> bool:
         return False
@@ -122,8 +122,8 @@ class RunningCoroutineState(CoroutineState):
 
 class NewCoroutineState(CoroutineState):
     @property
-    def state(self) -> str:
-        return CoroutineStates.CREATED
+    def status(self) -> str:
+        return CoroutineStatuses.CREATED
 
     def is_done(self) -> bool:
         return False
@@ -216,6 +216,17 @@ class Coroutine:
         if not self.is_running():
             self._run()
         return next(self._step())
+
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        status = self.state.status
+        prefix = f"{cls_name}(id={id(self)}, status={status}"
+        if self.is_done():
+            if exc := self.exception():
+                prefix = f"{prefix}, raised={exc}"
+            else:
+                prefix = f"{prefix}, returned={self.result()}"
+        return f"{prefix})"
 
     @property
     def state(self) -> CoroutineState:
