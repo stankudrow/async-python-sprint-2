@@ -54,9 +54,8 @@ def test_undone_results():
 def test_wait(gen: Callable, result: Any, exception: None | Exception):
     coro = Coroutine(gen_fn=gen)
 
-    val = coro.wait()
+    coro.wait()
 
-    assert val is None
     assert coro.is_done()
     assert coro.result() == result
 

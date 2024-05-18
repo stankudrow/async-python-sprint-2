@@ -208,8 +208,8 @@ class Coroutine:
             self._coro = _ensure_generator(gen_fn, *args, **kwargs)
         except TypeError as e:
             raise CoroutineError(str(e)) from e
-        self._res = None
-        self._exc = None
+        self._res: typing.Any = None
+        self._exc: None | Exception = None
         self._sm = CoroutineStateMachine()
 
     def __next__(self) -> typing.Any:

@@ -1,5 +1,6 @@
-from datetime import datetime
-from typing import Any, Callable, Iterable, Mapping
+import copy
+import datetime
+import typing
 
 from pydantic import BaseModel, NonNegativeInt, ValidationError
 
@@ -9,11 +10,11 @@ class JobError(Exception):
 
 
 class JobInfo(BaseModel):
-    fn: Callable
-    args: tuple[Any, ...] = ()
-    kwargs: dict[str, Any] = {}
+    fn: typing.Callable
+    args: tuple[typing.Any, ...] = ()
+    kwargs: dict[str, typing.Any] = {}
     max_retries: None | NonNegativeInt = None
-    start: None | datetime = None
+    start: None | datetime.datetime = None
     duration: None | NonNegativeInt = None
     dependencies: tuple["JobInfo", ...] = ()
 
@@ -21,30 +22,33 @@ class JobInfo(BaseModel):
 class Job:
     def __init__(
         self,
-        fn: Callable,
-        args: None | Iterable[Any] = None,
-        kwargs: None | Mapping[str, Any] = None,
+        fn: typing.Callable,
+        args: None | typing.Iterable[typing.Any] = None,
+        kwargs: None | typing.Mapping[str, typing.Any] = None,
         max_retries: None | NonNegativeInt = None,
-        start: None | datetime = None,
+        start: None | datetime.datetime = None,
         duration: None | NonNegativeInt = None,
-        dependencies: None | Iterable["Job"] = None,
+        dependencies: None | typing.Iterable["Job"] = None,
     ) -> None:
         try:
             deps = [dep_job.info for dep_job in dependencies] if dependencies else ()
             self._info = JobInfo(
                 fn=fn,
-                args=args if args else (),
-                kwargs=kwargs if kwargs else {},
+                args=tuple(args) if args else (),
+                kwargs=dict(kwargs) if kwargs else {},
                 max_retries=max_retries,
                 start=start,
                 duration=duration,
-                dependencies=deps,
+                dependencies=tuple(deps),
             )
         except (AttributeError, ValidationError) as e:
             raise JobError(str(e)) from e
 
-    def __eq__(self, other: "Job") -> bool:
-        return self._info == other._info
+    def __eq__(self, other) -> bool:
+        sinfo = self._info
+        if isinstance(other, Job):
+            return sinfo == other._info
+        return sinfo == other
 
     def __lt__(self, other: "Job") -> bool:
         sst = self.info.start
@@ -63,9 +67,9 @@ class Job:
             JobInfo - the deepcopy of the Job data
         """
 
-        return self._info
+        return copy.deepcopy(self._info)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, typing.Any]:
         """Returns the job as a dictionary.
 
         Returns:
