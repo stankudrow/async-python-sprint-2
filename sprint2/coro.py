@@ -239,7 +239,7 @@ class Coroutine:
         return self.state.is_running()
 
     def exception(self) -> None | Exception:
-        """Returns an exception or None for a done coroutine.
+        """Return an Exception or None for a done coroutine.
 
         Raises:
             CoroutineError - if a coroutine is not done
@@ -255,10 +255,14 @@ class Coroutine:
         raise CoroutineError(msg)
 
     def result(self) -> typing.Any:
-        """Returns either the result or raises an exception.
+        """Return the result or raise an exception.
 
         Raises:
             CoroutineError - accessing the result of an unfinished coroutine
+            Exception - a coroutine has finished abnormally
+
+        Returns:
+            Any - a value from a normal return
         """
 
         if self.state.is_done():
@@ -273,7 +277,7 @@ class Coroutine:
         self._coro.close()
 
     def _run(self) -> None:
-        """Moves the coroutine into the running state.
+        """Moves a coroutine into the running state.
 
         To proceed, use the next function on the coroutine.
         """
@@ -297,7 +301,7 @@ class Coroutine:
             self._finalise()
 
     def wait(self) -> None:
-        """Waits for the coroutine.
+        """Waits for a given coroutine to finish.
 
         The waiting is done in a blocking way.
         To get the result, use the result() function.
@@ -310,6 +314,8 @@ class Coroutine:
 
 
 def coroutine(gen_func: typing.Callable):
+    """Turns a generator function into a Coroutine."""
+
     @functools.wraps(gen_func)
     def _wrapper(*args, **kwargs):
         return Coroutine(gen_fn=gen_func, args=args, kwargs=kwargs)

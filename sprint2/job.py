@@ -16,7 +16,6 @@ class JobInfo(BaseModel):
     max_retries: None | NonNegativeInt = None
     start: None | datetime.datetime = None
     duration: None | NonNegativeInt = None
-    dependencies: tuple["JobInfo", ...] = ()
 
 
 class Job:
@@ -31,7 +30,6 @@ class Job:
         dependencies: None | typing.Iterable["Job"] = None,
     ) -> None:
         try:
-            deps = [dep_job.info for dep_job in dependencies] if dependencies else ()
             self._info = JobInfo(
                 fn=fn,
                 args=tuple(args) if args else (),
@@ -39,7 +37,11 @@ class Job:
                 max_retries=max_retries,
                 start=start,
                 duration=duration,
-                dependencies=tuple(deps),
+            )
+            self._deps = (
+                [Job(**dep_job.info.model_dump()) for dep_job in dependencies]
+                if dependencies
+                else []
             )
         except (AttributeError, ValidationError) as e:
             raise JobError(str(e)) from e
@@ -59,21 +61,37 @@ class Job:
             return False
         return sst < ost
 
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        params = f"info={{{self._info}}}, dependencies={self._deps}"
+        return f"{cls_name}({params})"
+
+    @property
+    def dependencies(self) -> list["Job"]:
+        """Return the dependencies of the job.
+
+        Returns:
+            JobInfo - the deepcopy of the Job dependencies
+        """
+
+        return copy.deepcopy(self._deps)
+
     @property
     def info(self) -> JobInfo:
         """Return the information about the job.
 
         Returns:
-            JobInfo - the deepcopy of the Job data
+            JobInfo - the deepcopy of the Job information
         """
 
         return copy.deepcopy(self._info)
 
-    def to_dict(self) -> dict[str, typing.Any]:
-        """Returns the job as a dictionary.
+    def to_dict(self) -> dict[str, dict[str, typing.Any] | list[dict[str, typing.Any]]]:
+        """Return the job as a dictionary.
 
         Returns:
-            dict[str, Any]
+            dict[str, Any] ?????
         """
 
-        return self._info.model_dump()
+        deps = [dep_job.to_dict() for dep_job in self._deps]
+        return {"info": self._info.model_dump(), "dependencies": deps}

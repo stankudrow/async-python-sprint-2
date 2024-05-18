@@ -147,4 +147,6 @@ def test_repr_coro_with_raised():
 
     with suppress(StopIteration):
         next(coro)
-    assert str(coro) == f"{repr_base}, status={CoroutineStatuses.FINISHED}, raised=oh no)"
+    assert (
+        str(coro) == f"{repr_base}, status={CoroutineStatuses.FINISHED}, raised=oh no)"
+    )

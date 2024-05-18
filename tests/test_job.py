@@ -108,13 +108,15 @@ def test_job_equality(job1: Job, job2: Job, answer: bool) -> None:
         (
             Job(fn=_fn),
             {
-                "fn": _fn,
-                "args": (),
-                "kwargs": {},
-                "max_retries": None,
-                "start": None,
-                "duration": None,
-                "dependencies": (),
+                "info": {
+                    "fn": _fn,
+                    "args": (),
+                    "kwargs": {},
+                    "max_retries": None,
+                    "start": None,
+                    "duration": None,
+                },
+                "dependencies": [],
             },
         ),
         (
@@ -125,73 +127,30 @@ def test_job_equality(job1: Job, job2: Job, answer: bool) -> None:
                 max_retries=0,
                 start=PAST,
                 duration=1,
-                dependencies=[],
+                dependencies=[Job(fn=_Functor)],
             ),
             {
-                "fn": _fn,
-                "args": (1, "2"),
-                "kwargs": {"a": 7, "b": [4]},
-                "max_retries": 0,
-                "start": PAST,
-                "duration": 1,
-                "dependencies": (),
-            },
-        ),
-        (
-            Job(
-                fn=_fn,
-                dependencies=[
-                    Job(
-                        fn=_Functor,
-                        args={6},
-                        kwargs={"lol": "kek"},
-                        duration=5,
-                    ),
-                    Job(
-                        fn=_fn,
-                        args=None,
-                        kwargs=None,
-                        dependencies=[Job(fn=_Functor, start=NOW)],
-                    ),
+                "info": {
+                    "fn": _fn,
+                    "args": (1, "2"),
+                    "kwargs": {"a": 7, "b": [4]},
+                    "max_retries": 0,
+                    "start": PAST,
+                    "duration": 1,
+                },
+                "dependencies": [
+                    {
+                        "info": {
+                            "fn": _Functor,
+                            "args": (),
+                            "kwargs": {},
+                            "max_retries": None,
+                            "start": None,
+                            "duration": None,
+                        },
+                        "dependencies": [],
+                    },
                 ],
-            ),
-            {
-                "fn": _fn,
-                "args": (),
-                "kwargs": {},
-                "max_retries": None,
-                "start": None,
-                "duration": None,
-                "dependencies": (
-                    {
-                        "fn": _Functor,
-                        "args": (6,),
-                        "kwargs": {"lol": "kek"},
-                        "max_retries": None,
-                        "start": None,
-                        "duration": 5,
-                        "dependencies": (),
-                    },
-                    {
-                        "fn": _fn,
-                        "args": (),
-                        "kwargs": {},
-                        "max_retries": None,
-                        "start": None,
-                        "duration": None,
-                        "dependencies": (
-                            {
-                                "fn": _Functor,
-                                "args": (),
-                                "kwargs": {},
-                                "max_retries": None,
-                                "start": NOW,
-                                "duration": None,
-                                "dependencies": (),
-                            },  # this comma is so important
-                        ),
-                    },
-                ),
             },
         ),
     ],
