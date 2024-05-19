@@ -3,7 +3,8 @@ from typing import Any, Callable, ContextManager
 
 import pytest
 
-from sprint2.coro import Coroutine, CoroutineError, CoroutineStatuses
+from sprint2.asynco.coro import Coroutine, CoroutineError, CoroutineStatuses
+from sprint2.asynco.utils import wait
 
 
 CORO_DONE_IS_NO_RUN = "the finished coroutine is unrunnable"
@@ -49,8 +50,8 @@ def test_wait(gen: Callable, result: Any, expectation: ContextManager):
     coro = Coroutine(gen_fn=gen)
 
     with expectation:
-        res = coro.wait()
-        assert res == result
+        res = wait(coro)
+        assert res == [result]
 
 
 def test_next_with_normal_return():
@@ -85,21 +86,15 @@ def test_coroutine_switch():
     yields.append(next(coro1))
     yields.append(next(coro2))
     assert yields == [1, 42]
-    assert coro1.state.is_running()
-    assert coro2.state.is_running()
 
     yields.append(next(coro2))
     with suppress(StopIteration):
         next(coro1)
-    assert coro2.state.is_running()
     assert yields == [1, 42, 21]
-    assert coro1.state.is_done()
 
     with suppress(StopIteration):
         next(coro2)
     assert yields == [1, 42, 21]
-    assert coro1.state.is_done()
-    assert coro2.state.is_done()
 
     with pytest.raises(CoroutineError, match=CORO_DONE_IS_NO_RUN):
         next(coro1)

@@ -217,12 +217,8 @@ class Coroutine:
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        status = self.state.status
+        status = self._sm.state.status
         return f"{cls_name}(id={id(self)}, status={status})"
-
-    @property
-    def state(self) -> CoroutineState:
-        return self._sm._state
 
     def _finalise(self) -> None:
         self._sm.finish()
@@ -237,7 +233,7 @@ class Coroutine:
         self._sm.run()
 
     def _step(self) -> typing.Generator[typing.Any, None, None]:
-        if not self.state.is_running():
+        if not self._sm.state.is_running():
             msg = "the coroutine is not running"
             raise CoroutineError(msg)
         try:
@@ -251,19 +247,6 @@ class Coroutine:
         except Exception as exc:
             self._finalise()
             raise exc
-
-    def wait(self) -> typing.Any:
-        """Waits for a given coroutine to finish.
-
-        The waiting is done in a blocking way.
-        To get the result, use the result() function.
-        """
-
-        while True:
-            try:
-                next(self)
-            except StopIteration as result:
-                return result.value
 
 
 def coroutine(gen_func: typing.Callable):
