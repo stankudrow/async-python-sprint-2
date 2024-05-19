@@ -252,7 +252,7 @@ class Coroutine:
             self._finalise()
             raise exc
 
-    def wait(self) -> None:
+    def wait(self) -> typing.Any:
         """Waits for a given coroutine to finish.
 
         The waiting is done in a blocking way.
