@@ -55,7 +55,7 @@ class _Functor:
         ),
     ],
 )
-def test_job_less_than(job1: Job, job2: Job, answer: bool) -> None:
+def test_job_less_than_operator(job1: Job, job2: Job, answer: bool):
     res = job1 < job2
 
     assert res == answer
@@ -96,7 +96,7 @@ def test_job_less_than(job1: Job, job2: Job, answer: bool) -> None:
         ),
     ],
 )
-def test_job_equality(job1: Job, job2: Job, answer: bool) -> None:
+def test_job_equals_operator(job1: Job, job2: Job, answer: bool):
     res = job1 == job2
 
     assert res == answer
@@ -106,16 +106,14 @@ def test_job_equality(job1: Job, job2: Job, answer: bool) -> None:
     ("job", "answer"),
     [
         (
-            Job(fn=_fn),
+            Job(fn=_Functor),
             {
-                "info": {
-                    "fn": _fn,
-                    "args": (),
-                    "kwargs": {},
-                    "max_retries": None,
-                    "start": None,
-                    "duration": None,
-                },
+                "fn": _Functor,
+                "args": (),
+                "kwargs": {},
+                "max_retries": None,
+                "start": None,
+                "duration": None,
                 "dependencies": [],
             },
         ),
@@ -130,24 +128,77 @@ def test_job_equality(job1: Job, job2: Job, answer: bool) -> None:
                 dependencies=[Job(fn=_Functor)],
             ),
             {
-                "info": {
-                    "fn": _fn,
-                    "args": (1, "2"),
-                    "kwargs": {"a": 7, "b": [4]},
-                    "max_retries": 0,
-                    "start": PAST,
-                    "duration": 1,
-                },
+                "fn": _fn,
+                "args": (1, "2"),
+                "kwargs": {"a": 7, "b": [4]},
+                "max_retries": 0,
+                "start": PAST,
+                "duration": 1,
                 "dependencies": [
                     {
-                        "info": {
-                            "fn": _Functor,
-                            "args": (),
-                            "kwargs": {},
-                            "max_retries": None,
-                            "start": None,
-                            "duration": None,
-                        },
+                        "fn": _Functor,
+                        "args": (),
+                        "kwargs": {},
+                        "max_retries": None,
+                        "start": None,
+                        "duration": None,
+                        "dependencies": [],
+                    },
+                ],
+            },
+        ),
+        (
+            Job(
+                fn=_fn,
+                args=[1, "2"],
+                kwargs={"a": 7, "b": [4]},
+                max_retries=0,
+                start=PAST,
+                duration=1,
+                dependencies=[
+                    Job(
+                        fn=_Functor,
+                        start=FUTURE,
+                        duration=0,
+                        dependencies=[Job(fn=_fn)],
+                    ),
+                    Job(fn=_fn, start=NOW),
+                ],
+            ),
+            {
+                "fn": _fn,
+                "args": (1, "2"),
+                "kwargs": {"a": 7, "b": [4]},
+                "max_retries": 0,
+                "start": PAST,
+                "duration": 1,
+                "dependencies": [
+                    {
+                        "fn": _Functor,
+                        "args": (),
+                        "kwargs": {},
+                        "max_retries": None,
+                        "start": FUTURE,
+                        "duration": 0,
+                        "dependencies": [
+                            {
+                                "fn": _fn,
+                                "args": (),
+                                "kwargs": {},
+                                "max_retries": None,
+                                "start": None,
+                                "duration": None,
+                                "dependencies": [],
+                            },
+                        ],
+                    },
+                    {
+                        "fn": _fn,
+                        "args": (),
+                        "kwargs": {},
+                        "max_retries": None,
+                        "start": NOW,
+                        "duration": None,
                         "dependencies": [],
                     },
                 ],
@@ -155,7 +206,9 @@ def test_job_equality(job1: Job, job2: Job, answer: bool) -> None:
         ),
     ],
 )
-def test_job_to_dict(job: Job, answer: dict[str, Any]) -> None:
+def test_job_dict(job: Job, answer: dict[str, Any]) -> None:
     dct = job.to_dict()
+    new_job = Job.from_dict(dct)
 
     assert dct == answer
+    assert job == new_job

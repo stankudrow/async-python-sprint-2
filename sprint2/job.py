@@ -18,6 +18,13 @@ class JobInfo(BaseModel):
     duration: None | NonNegativeInt = None
 
 
+def validate_job(job: "Job") -> "Job":
+    if not isinstance(job, Job):
+        msg = f"{job} is not Job"
+        raise JobError(msg)
+    return job
+
+
 class Job:
     def __init__(
         self,
@@ -38,10 +45,8 @@ class Job:
                 start=start,
                 duration=duration,
             )
-            self._deps = (
-                [Job(**dep_job.info.model_dump()) for dep_job in dependencies]
-                if dependencies
-                else []
+            self._dependencies: list["Job"] = (
+                [validate_job(job) for job in dependencies] if dependencies else []
             )
         except (AttributeError, ValidationError) as e:
             raise JobError(str(e)) from e
@@ -53,45 +58,85 @@ class Job:
         return sinfo == other
 
     def __lt__(self, other: "Job") -> bool:
-        sst = self.info.start
-        ost = other.info.start
-        if sst is None:
-            return True
-        if ost is None:
+        sst, ost = self.start, other.start
+        if sst and ost:
+            return sst < ost
+        if sst and ost is None:
             return False
-        return sst < ost
+        if ost and sst is None:
+            return True
+        sdur, odur = self.duration, other.duration
+        if sdur and odur:
+            return sdur < odur
+        if sdur and odur is None:
+            return True
+        if odur and sdur is None:
+            return False
+        return True
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        params = f"info={{{self._info}}}, dependencies={self._deps}"
+        params = ", ".join(self.to_dict())
         return f"{cls_name}({params})"
 
     @property
-    def dependencies(self) -> list["Job"]:
-        """Return the dependencies of the job.
-
-        Returns:
-            JobInfo - the deepcopy of the Job dependencies
-        """
-
-        return copy.deepcopy(self._deps)
+    def func(self) -> typing.Callable:
+        return self._info.fn
 
     @property
-    def info(self) -> JobInfo:
-        """Return the information about the job.
+    def args(self) -> tuple[typing.Any, ...]:
+        return self._info.args
 
-        Returns:
-            JobInfo - the deepcopy of the Job information
-        """
+    @property
+    def kwargs(self) -> dict[str, typing.Any]:
+        return self._info.kwargs
 
-        return copy.deepcopy(self._info)
+    @property
+    def retries(self) -> None | NonNegativeInt:
+        return self._info.max_retries
 
-    def to_dict(self) -> dict[str, dict[str, typing.Any] | list[dict[str, typing.Any]]]:
-        """Return the job as a dictionary.
+    @property
+    def start(self) -> None | datetime.datetime:
+        return self._info.start
 
-        Returns:
-            dict[str, Any] ?????
-        """
+    @property
+    def duration(self) -> None | NonNegativeInt:
+        return self._info.duration
 
-        deps = [dep_job.to_dict() for dep_job in self._deps]
-        return {"info": self._info.model_dump(), "dependencies": deps}
+    @property
+    def dependencies(self) -> list["Job"]:
+        """Return the dependencies of the job."""
+
+        return self._dependencies
+
+    def get_deadline(self) -> None | datetime.datetime:
+        now_ = datetime.datetime.now()
+        start = self.start
+        if start is None:
+            start = now_
+        duration = self.duration
+        if duration:
+            return start + datetime.timedelta(seconds=duration)
+        return None
+
+    @classmethod
+    def from_dict(cls, dct: dict[str, typing.Any]) -> "Job":
+        params = copy.deepcopy(dct)
+        deps = []
+        for dependant in params.pop("dependencies"):
+            deps.append(Job.from_dict(dependant))
+        return Job(**params, dependencies=deps)
+
+    def to_dict(self) -> dict[str, typing.Any]:
+        """Return the job as a dictionary."""
+
+        attrs = {
+            "fn": self.func,
+            "args": self.args,
+            "kwargs": self.kwargs,
+            "start": self.start,
+            "max_retries": self.retries,
+            "duration": self.duration,
+            "dependencies": [dep_job.to_dict() for dep_job in self._dependencies],
+        }
+        return attrs
