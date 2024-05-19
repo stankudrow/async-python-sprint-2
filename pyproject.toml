@@ -14,6 +14,7 @@ pydantic = "^2.7.1"
 black = "^24.4.2"
 mypy = "^1.10.0"
 ruff = "^0.4.2"
+freezegun = "^1.5.1"
 
 
 [tool.poetry.group.test.dependencies]
