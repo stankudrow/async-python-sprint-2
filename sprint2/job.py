@@ -46,7 +46,9 @@ class Job:
                 duration=duration,
             )
             self._dependencies: list["Job"] = (
-                [validate_job(job) for job in dependencies] if dependencies else []
+                sorted(validate_job(job) for job in dependencies)
+                if dependencies
+                else []
             )
         except (AttributeError, ValidationError) as e:
             raise JobError(str(e)) from e
@@ -56,6 +58,11 @@ class Job:
         if isinstance(other, Job):
             return sinfo == other._info
         return sinfo == other
+
+    def __iter__(self) -> typing.Generator["Job", None, None]:
+        for dependant in self.dependencies:
+            yield from dependant
+        yield self
 
     def __lt__(self, other: "Job") -> bool:
         sst, ost = self.start, other.start
@@ -76,8 +83,8 @@ class Job:
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        params = ", ".join(self.to_dict())
-        return f"{cls_name}({params})"
+        dct = self.to_dict()
+        return f"{cls_name}<{dct}>"
 
     @property
     def func(self) -> typing.Callable:
@@ -115,9 +122,23 @@ class Job:
         if start is None:
             start = now_
         duration = self.duration
-        if duration:
+        if duration is not None:
             return start + datetime.timedelta(seconds=duration)
         return None
+
+    def is_expired(self) -> bool:
+        deadline = self.get_deadline()
+        if deadline is None:
+            return False
+        now_ = datetime.datetime.now()
+        return now_ > deadline
+
+    def is_startable(self) -> bool:
+        start = self.start
+        if start is None:
+            return True
+        now_ = datetime.datetime.now()
+        return now_ >= start
 
     @classmethod
     def from_dict(cls, dct: dict[str, typing.Any]) -> "Job":
