@@ -6,13 +6,11 @@ import pytest
 from sprint2.coro import Coroutine, CoroutineError, CoroutineStatuses
 
 
-CORO_NOT_DONE_RESULT = "the coroutine is not done, no result to return"
-CORO_NOT_DONE_EXCEPTION = "the coroutine is not done, no exception to return"
 CORO_DONE_IS_NO_RUN = "the finished coroutine is unrunnable"
 
 
 def _foo():
-    return None
+    return 100
 
 
 def _gen1():
@@ -39,50 +37,44 @@ def test_is_coroutine(func: Callable, exp: ContextManager):
         Coroutine(func)
 
 
-def test_undone_results():
-    coro = Coroutine(gen_fn=_gen1)
-
-    with pytest.raises(CoroutineError, match=CORO_NOT_DONE_RESULT):
-        coro.result()
-
-    with pytest.raises(CoroutineError, match=CORO_NOT_DONE_EXCEPTION):
-        coro.exception()
-
-
 @pytest.mark.parametrize(
-    ("gen", "result", "exception"),
+    ("gen", "result", "expectation"),
     [
-        (_gen1, 2, None),
-        (_gen2, 12, None),
+        (_gen1, 2, does_not_raise()),
+        (_gen2, 12, does_not_raise()),
+        (_gen3, None, pytest.raises(ZeroDivisionError)),
     ],
 )
-def test_wait(gen: Callable, result: Any, exception: None | Exception):
+def test_wait(gen: Callable, result: Any, expectation: ContextManager):
     coro = Coroutine(gen_fn=gen)
 
-    coro.wait()
-
-    assert coro.is_done()
-    assert coro.result() == result
-
-    if exception is None:
-        assert coro.exception() is None
-    else:
-        assert coro.exception() == exception
+    with expectation:
+        res = coro.wait()
+        assert res == result
 
 
-def test_next_operator():
+def test_next_with_normal_return():
+    yieldo = 1
     coro = Coroutine(gen_fn=_gen1)
 
     val = next(coro)
-    assert val == 1
-    assert coro.is_running()
+    assert val == yieldo
 
     with suppress(StopIteration):
         val = next(coro)
-    assert val == 1  # the previous yield
-    assert coro.is_done()
+    assert val == yieldo
 
-    assert coro.result() == 2
+
+def test_next_with_exception_raised():
+    yieldo = 12
+    coro = Coroutine(gen_fn=_gen3)
+
+    val = next(coro)
+    assert val == yieldo
+
+    with suppress(StopIteration, ZeroDivisionError):
+        val = next(coro)
+    assert val == yieldo
 
 
 def test_coroutine_switch():
@@ -102,13 +94,10 @@ def test_coroutine_switch():
     assert coro2.state.is_running()
     assert yields == [1, 42, 21]
     assert coro1.state.is_done()
-    assert coro1.result() == 2
 
     with suppress(StopIteration):
         next(coro2)
     assert yields == [1, 42, 21]
-    assert coro1.result() == 2
-    assert coro2.result() == 12
     assert coro1.state.is_done()
     assert coro2.state.is_done()
 
@@ -118,7 +107,7 @@ def test_coroutine_switch():
         next(coro2)
 
 
-def test_repr_coro_with_returned():
+def test_coro_repr_normal_return():
     coro = Coroutine(gen_fn=_gen1)
 
     cls_name = Coroutine.__name__
@@ -131,10 +120,10 @@ def test_repr_coro_with_returned():
 
     with suppress(StopIteration):
         next(coro)
-    assert str(coro) == f"{repr_base}, status={CoroutineStatuses.FINISHED}, returned=2)"
+    assert str(coro) == f"{repr_base}, status={CoroutineStatuses.FINISHED})"
 
 
-def test_repr_coro_with_raised():
+def test_repr_coro_exception_raised():
     coro = Coroutine(gen_fn=_gen3)
 
     cls_name = Coroutine.__name__
@@ -145,8 +134,6 @@ def test_repr_coro_with_raised():
     next(coro)
     assert str(coro) == f"{repr_base}, status={CoroutineStatuses.RUNNING})"
 
-    with suppress(StopIteration):
+    with suppress(StopIteration, ZeroDivisionError):
         next(coro)
-    assert (
-        str(coro) == f"{repr_base}, status={CoroutineStatuses.FINISHED}, raised=oh no)"
-    )
+    assert str(coro) == f"{repr_base}, status={CoroutineStatuses.FINISHED})"

@@ -208,69 +208,21 @@ class Coroutine:
             self._coro = _ensure_generator(gen_fn, *args, **kwargs)
         except TypeError as e:
             raise CoroutineError(str(e)) from e
-        self._res: typing.Any = None
-        self._exc: None | Exception = None
         self._sm = CoroutineStateMachine()
 
     def __next__(self) -> typing.Any:
-        if not self.is_running():
+        if not self._sm.is_running():
             self._run()
         return next(self._step())
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
         status = self.state.status
-        prefix = f"{cls_name}(id={id(self)}, status={status}"
-        if self.is_done():
-            if exc := self.exception():
-                prefix = f"{prefix}, raised={exc}"
-            else:
-                prefix = f"{prefix}, returned={self.result()}"
-        return f"{prefix})"
+        return f"{cls_name}(id={id(self)}, status={status})"
 
     @property
     def state(self) -> CoroutineState:
         return self._sm._state
-
-    def is_done(self) -> bool:
-        return self.state.is_done()
-
-    def is_running(self) -> bool:
-        return self.state.is_running()
-
-    def exception(self) -> None | Exception:
-        """Return an Exception or None for a done coroutine.
-
-        Raises:
-            CoroutineError - if a coroutine is not done
-
-        Returns:
-            None - if a coroutine is finished normally
-            Exception - otherwise
-        """
-
-        if self.state.is_done():
-            return self._exc
-        msg = "the coroutine is not done, no exception to return"
-        raise CoroutineError(msg)
-
-    def result(self) -> typing.Any:
-        """Return the result or raise an exception.
-
-        Raises:
-            CoroutineError - accessing the result of an unfinished coroutine
-            Exception - a coroutine has finished abnormally
-
-        Returns:
-            Any - a value from a normal return
-        """
-
-        if self.state.is_done():
-            if exc := self.exception():
-                raise exc
-            return self._res
-        msg = "the coroutine is not done, no result to return"
-        raise CoroutineError(msg)
 
     def _finalise(self) -> None:
         self._sm.finish()
@@ -293,12 +245,12 @@ class Coroutine:
             while True:
                 value = self._coro.send(value)
                 yield value
-        except StopIteration as result:
-            self._res = result.value
+        except StopIteration as sierr:
             self._finalise()
+            return sierr.value
         except Exception as exc:
-            self._exc = exc
             self._finalise()
+            raise exc
 
     def wait(self) -> None:
         """Waits for a given coroutine to finish.
@@ -307,10 +259,11 @@ class Coroutine:
         To get the result, use the result() function.
         """
 
-        if not self.state.is_running():
-            self._run()
-        for _ in self._step():
-            pass
+        while True:
+            try:
+                next(self)
+            except StopIteration as result:
+                return result.value
 
 
 def coroutine(gen_func: typing.Callable):
