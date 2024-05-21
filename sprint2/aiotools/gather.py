@@ -14,7 +14,7 @@ class _NAW:
 
 
 def gather(*aws, return_exceptions: bool = False) -> list:
-    coros = deque([_NAW(num=num, aw=aw) for num ,aw in enumerate(aws)])
+    coros = deque([_NAW(num=num, aw=aw) for num, aw in enumerate(aws)])
     results: list[_NAW] = []
     while coros:
         coro = coros.popleft()
@@ -27,5 +27,6 @@ def gather(*aws, return_exceptions: bool = False) -> list:
         except Exception as exc:
             if not return_exceptions:
                 raise exc
-            results.append(exc)
+            coro.res = exc
+            results.append(coro)
     return [naw.res for naw in sorted(results, key=lambda _naw: _naw.num)]
