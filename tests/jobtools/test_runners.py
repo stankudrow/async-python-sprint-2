@@ -5,7 +5,7 @@ import pytest
 
 from sprint2.aiotools import wait
 from sprint2.jobtools.job import Job
-from sprint2.jobtools.runner import async_run_job
+from sprint2.jobtools.runners import async_run_job
 
 
 NOW = datetime.now()
