@@ -5,11 +5,7 @@ from typing import Any, Callable, Iterable, Mapping
 from pydantic import BaseModel, NonNegativeInt, ValidationError
 
 
-__all__ = [
-    "Job",
-    "JobError",
-    "JobInfo",
-]
+__all__ = ["Job", "JobError", "JobInfo"]
 
 
 class JobError(Exception):
@@ -25,7 +21,7 @@ class JobInfo(BaseModel):
     duration: None | NonNegativeInt = None
 
 
-def _validate_job(job: "Job") -> "Job":
+def validate_job_type(job: "Job") -> "Job":
     if not isinstance(job, Job):
         msg = f"{job} is not Job"
         raise JobError(msg)
@@ -52,12 +48,11 @@ class Job:
                 start=start,
                 duration=duration,
             )
-        except ValidationError as e:
+            self._deps: list["Job"] = (
+                [validate_job_type(job) for job in dependencies] if dependencies else []
+            )
+        except (TypeError, ValidationError) as e:
             raise JobError(str(e)) from e
-        self._deps: list["Job"] = (
-            [_validate_job(job) for job in dependencies] if dependencies else []
-        )
-        self._runner = JobRunnerStrategy(self)
 
     def __eq__(self, other) -> bool:
         sinfo = self._info
@@ -99,9 +94,6 @@ class Job:
     @property
     def dependencies(self) -> list["Job"]:
         return self._deps
-
-    # def gen_dependencies(self) -> Generator["Job", None, None]:
-    #     yield from self._runner.gen_dependencies()
 
     def get_deadline(self) -> None | datetime:
         now_ = datetime.now()
@@ -149,20 +141,3 @@ class Job:
             "duration": self.duration,
             "dependencies": [dep_job.to_dict() for dep_job in self._deps],
         }
-
-    # def run(self):
-    #     yield from self._runner.step()
-
-
-class JobRunnerStrategy:
-    def __init__(self, job: "Job"):
-        self._job = job
-
-    def gen_dependencies(self):
-        for job in self._job.dependencies:
-            if job.dependencies:
-                yield from job.gen_dependencies()
-            yield job
-
-    # def step(self) -> Generator[Any, None, Any]:
-    #     yield from async_wait(run_job(self._job))

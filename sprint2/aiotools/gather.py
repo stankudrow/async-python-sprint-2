@@ -1,9 +1,11 @@
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any, Generator, Iterator
+
+from sprint2.aiotools.wait import wait
 
 
-__all__ = ["gather"]
+__all__ = ["async_gather", "gather"]
 
 
 @dataclass
@@ -13,13 +15,13 @@ class _NAW:
     res: Any = None
 
 
-def gather(*aws, return_exceptions: bool = False) -> list:
+def async_gather(*aws, return_exceptions: bool = False) -> Generator[Any, None, Any]:
     coros = deque([_NAW(num=num, aw=aw) for num, aw in enumerate(aws)])
     results: list[_NAW] = []
     while coros:
         coro = coros.popleft()
         try:
-            next(coro.aw)
+            yield next(coro.aw)
             coros.append(coro)
         except StopIteration as r:
             coro.res = r.value
@@ -30,3 +32,9 @@ def gather(*aws, return_exceptions: bool = False) -> list:
             coro.res = exc
             results.append(coro)
     return [naw.res for naw in sorted(results, key=lambda _naw: _naw.num)]
+
+
+def gather(*aws, return_exceptions: bool = False) -> list:
+    gatherer = async_gather(*aws, return_exceptions=return_exceptions)
+    results = wait(gatherer)
+    return results.pop()

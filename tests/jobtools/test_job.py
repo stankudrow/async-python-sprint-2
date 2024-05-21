@@ -4,7 +4,7 @@ from typing import Any
 from freezegun import freeze_time
 import pytest
 
-from sprint2.job import Job
+from sprint2.jobtools.job import Job
 from sprint2.aiotools import wait, async_sleep
 
 

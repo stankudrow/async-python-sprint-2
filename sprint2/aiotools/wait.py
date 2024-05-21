@@ -3,10 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any, Generator
 
 
-__all__ = [
-    "async_wait",
-    "wait",
-]
+__all__ = ["async_wait", "wait"]
 
 
 def async_wait(*aws, timeout: None | float = None) -> Generator[Any, None, list]:
