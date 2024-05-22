@@ -21,6 +21,9 @@ class Coroutine:
     def __next__(self) -> Any:
         return next(self._gen)
 
+    def close(self) -> None:
+        self._gen.close()
+
 
 def coroutine(gen_func: Callable) -> Callable[[Any], Any]:
     @wraps(gen_func)

@@ -141,3 +141,7 @@ class Job:
             "duration": self.duration,
             "dependencies": [dep_job.to_dict() for dep_job in self._deps],
         }
+
+    def run(self) -> Any:
+        f, a, k = self.func, self.args, self.kwargs
+        return f(*a, **k)

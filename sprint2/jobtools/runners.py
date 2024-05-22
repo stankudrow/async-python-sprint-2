@@ -1,5 +1,4 @@
 from datetime import datetime
-from functools import partial
 from typing import Generator
 
 from sprint2.aiotools import coroutine, async_wait, async_sleep
@@ -28,7 +27,7 @@ def async_run_job(job: Job) -> Generator:
         for _ in async_sleep(seconds=to_sleep):
             yield
             _check_job_expired(job)
-    f = partial(job.func, *job.args, **job.kwargs)
+    f = job.run
     result = None
     yield
     if max_retries := job.max_retries:
